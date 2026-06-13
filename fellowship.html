@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en" data-state="havens-day">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Fellowship — A cognitive-state operating layer</title>
+<meta name="description" content="Fellowship is a cognitive-state operating layer for modern computing. Devices that adapt to focus, energy, attention, and intent — not the other way around." />
+
+<!-- ============================================================
+     FONTS — Fraunces (editorial display), IBM Plex Sans (body),
+     IBM Plex Mono (UI chrome / instrument labels)
+     ============================================================ -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..600&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+<style>
+/* ============================================================
+   1. TOKENS  — dark-spectrum base + per-state accent system
+   State theming is driven by [data-state] on <html>; every
+   accent flows through CSS variables so transitions are smooth.
+   ============================================================ */
+:root{
+  --bg:        #07080b;
+  --bg-2:      #0b0d12;
+  --ink:       #f4f1ea;   /* primary text — 16.8:1 on --bg  */
+  --ink-soft:  #b9b6ad;   /* secondary    — 8.1:1  on --bg  */
+  --ink-mute:  #7e7c76;   /* tertiary     — 4.6:1  on --bg  */
+  --line:      rgba(244,241,234,.10);
+  --line-2:    rgba(244,241,234,.06);
+  --panel:     rgba(255,255,255,.025);
+
+  /* accent vars — overwritten per state below */
+  --accent:    #46d6cf;
+  --accent-hi: #8ff0e7;
+  --glow:      rgba(70,214,207,.45);
+  --temp:      #0a1416;   /* state-tinted backdrop pole */
+  --flow:      0;         /* horizontal-drift intensity (Havens modes) */
+
+  --ease:      cubic-bezier(.22,.61,.36,1);
+  --ease-out:  cubic-bezier(.16,1,.3,1);
+  --shell:     min(1180px, 92vw);
+  --radius:    18px;
+}
+
+/* ---- seven environments — accents sampled from the reference art ----
+   Signal Day        receptive learning  → constellations over lightfall
+   Signal Moonlight  receptive, dimmed   → twilight waits for no one
+   Drift             light arousal        → designed (reference pending)
+   Forge             hyperfocus           → forged in deep shadow
+   Hearth            sustained attention  → hearth heart home
+   Havens Day        sanctuary / idle     → ethereal light, golden forest
+   Havens Moonlight  closure              → moonlit haven                   */
+html[data-state="signal-day"]       { --accent:#6fcfc8; --accent-hi:#ead0a0; --glow:rgba(111,207,200,.34); --temp:#14182a; --flow:0;   }
+html[data-state="signal-moonlight"] { --accent:#57b9b6; --accent-hi:#c9b49e; --glow:rgba(87,185,182,.24);  --temp:#10131f; --flow:0;   }
+html[data-state="drift"]            { --accent:#b29bff; --accent-hi:#ddccff; --glow:rgba(178,155,255,.44); --temp:#120d24; --flow:0;   }
+html[data-state="forge"]            { --accent:#e0a45c; --accent-hi:#ffce8f; --glow:rgba(224,164,92,.28);  --temp:#0b090d; --flow:0;   }
+html[data-state="hearth"]           { --accent:#c98a4e; --accent-hi:#e6b87e; --glow:rgba(201,138,78,.26);  --temp:#130f0b; --flow:0;   }
+html[data-state="havens-day"]       { --accent:#d8be6e; --accent-hi:#efe0a4; --glow:rgba(216,190,110,.30); --temp:#20241a; --flow:.20; }
+html[data-state="havens-moonlight"] { --accent:#8ea3c4; --accent-hi:#c6cee0; --glow:rgba(142,163,196,.26); --temp:#121620; --flow:.30; }
+
+*,*::before,*::after{ box-sizing:border-box; }
+
+html{ scroll-behavior:smooth; }
+body{
+  margin:0;
+  font-family:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,sans-serif;
+  font-weight:300;
+  color:var(--ink);
+  background:var(--bg);
+  line-height:1.62;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+
+/* ============================================================
+   2. ATMOSPHERE — layered dark-spectrum field + grain.
+   Both layers are decorative; pointer-events disabled so they
+   never intercept interaction. They recolor with --temp/--glow.
+   ============================================================ */
+.field{
+  position:fixed; inset:0; z-index:-3; pointer-events:none;
+  background:
+    radial-gradient(120% 90% at 12% -8%, var(--temp) 0%, transparent 55%),
+    radial-gradient(90% 80% at 100% 0%, color-mix(in oklab, var(--accent) 18%, transparent) 0%, transparent 45%),
+    radial-gradient(140% 120% at 50% 120%, color-mix(in oklab, var(--accent) 10%, transparent) 0%, transparent 50%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 60%, var(--bg) 100%);
+  transition:background 1.1s var(--ease);
+}
+.grain{
+  position:fixed; inset:0; z-index:-1; pointer-events:none; opacity:.045;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+/* Havens modes express idle/closure as slow horizontal gradient drift.
+   Opacity is bound to --flow, so it only surfaces for Havens states. */
+.drift-x{
+  position:fixed; inset:0; z-index:-1; pointer-events:none;
+  opacity:var(--flow); transition:opacity 1.1s var(--ease);
+  background:linear-gradient(90deg,
+    transparent 0%, color-mix(in oklab,var(--accent) 22%, transparent) 30%,
+    color-mix(in oklab,var(--accent-hi) 14%, transparent) 55%,
+    color-mix(in oklab,var(--accent) 18%, transparent) 75%, transparent 100%);
+  background-size:240% 100%;
+}
+@media(prefers-reduced-motion:no-preference){ .drift-x{ animation:driftx 26s linear infinite; } }
+@keyframes driftx{ to{ background-position:240% 0; } }
+@keyframes dash{ to{ stroke-dashoffset:-140; } }   /* architecture signal-flow wires */
+/* faint full-bleed wash of the active environment's reference art */
+.scene-bg{
+  position:fixed; inset:0; z-index:-2; pointer-events:none; opacity:.16;
+  background-size:cover; background-position:center top;
+  transition:opacity 1.2s var(--ease);
+  -webkit-mask-image:linear-gradient(180deg,#000 0%, rgba(0,0,0,.35) 45%, transparent 80%);
+          mask-image:linear-gradient(180deg,#000 0%, rgba(0,0,0,.35) 45%, transparent 80%);
+}
+
+/* ============================================================
+   3. macOS-INSPIRED MENU BAR (sticky window chrome)
+   ============================================================ */
+.menubar{
+  position:sticky; top:0; z-index:60;
+  display:flex; align-items:center; gap:18px;
+  padding:9px 22px;
+  font-family:"IBM Plex Mono",monospace; font-size:12.5px; letter-spacing:.02em;
+  color:var(--ink-soft);
+  background:color-mix(in oklab, var(--bg) 72%, transparent);
+  backdrop-filter:saturate(140%) blur(14px);
+  border-bottom:1px solid var(--line-2);
+}
+.traffic{ display:flex; gap:7px; }
+.traffic i{ width:11px; height:11px; border-radius:50%; display:block; }
+.traffic i:nth-child(1){ background:#ff5f57; }
+.traffic i:nth-child(2){ background:#febc2e; }
+.traffic i:nth-child(3){ background:#28c840; }
+.menubar .brand{ color:var(--ink); font-weight:600; }
+.menubar .sep{ color:var(--ink-mute); }
+.menubar .pill{
+  display:inline-flex; align-items:center; gap:7px;
+  padding:3px 10px; border-radius:999px;
+  border:1px solid color-mix(in oklab, var(--accent) 45%, var(--line));
+  color:var(--accent-hi);
+  transition:color .8s var(--ease), border-color .8s var(--ease);
+}
+.menubar .pill .dot{ width:7px; height:7px; border-radius:50%; background:var(--accent);
+  box-shadow:0 0 10px 1px var(--glow); transition:background .8s var(--ease), box-shadow .8s var(--ease); }
+.menubar .right{ margin-left:auto; display:flex; gap:18px; align-items:center; }
+.menubar .clock{ color:var(--ink); font-variant-numeric:tabular-nums; }
+@media(max-width:680px){ .menubar .hide-sm{ display:none; } }
+
+/* ============================================================
+   4. SHARED LAYOUT
+   ============================================================ */
+section{ width:var(--shell); margin-inline:auto; padding:104px 0; }
+.eyebrow{
+  font-family:"IBM Plex Mono",monospace; font-size:12px; letter-spacing:.26em;
+  text-transform:uppercase; color:var(--accent-hi);
+  display:inline-flex; align-items:center; gap:10px;
+  transition:color .8s var(--ease);
+}
+.eyebrow::before{ content:""; width:26px; height:1px; background:var(--accent); transition:background .8s var(--ease); }
+h2.head{
+  font-family:"Fraunces",serif; font-weight:400; font-optical-sizing:auto;
+  font-size:clamp(2rem,4.4vw,3.3rem); line-height:1.04; letter-spacing:-.02em;
+  margin:.5em 0 .2em; max-width:18ch;
+}
+.lede{ color:var(--ink-soft); font-size:clamp(1.02rem,1.5vw,1.18rem); max-width:62ch; }
+
+/* ============================================================
+   5. HERO
+   ============================================================ */
+.hero{ padding-top:64px; padding-bottom:60px; }
+.hero-grid{
+  display:grid; grid-template-columns:1.05fr .95fr; gap:48px; align-items:center;
+}
+@media(max-width:900px){ .hero-grid{ grid-template-columns:1fr; gap:34px; } }
+
+.hero h1{
+  font-family:"Fraunces",serif; font-weight:300; font-optical-sizing:auto;
+  font-size:clamp(2.9rem,7.4vw,5.6rem); line-height:.98; letter-spacing:-.03em;
+  margin:18px 0 22px;
+}
+.hero h1 em{ font-style:italic; font-weight:400; color:var(--accent-hi); transition:color .9s var(--ease); }
+.hero .lede{ font-size:clamp(1.05rem,1.6vw,1.25rem); }
+.hero-cta{ display:flex; gap:14px; flex-wrap:wrap; margin-top:30px; }
+.btn{
+  font-family:"IBM Plex Mono",monospace; font-size:13.5px; letter-spacing:.02em;
+  padding:13px 22px; border-radius:12px; text-decoration:none; cursor:pointer;
+  border:1px solid transparent; transition:transform .25s var(--ease), box-shadow .35s var(--ease), background .35s var(--ease);
+}
+.btn-primary{
+  color:#0a0a0a; font-weight:600;
+  background:linear-gradient(120deg, var(--accent), var(--accent-hi));
+  box-shadow:0 8px 30px -8px var(--glow);
+}
+.btn-primary:hover{ transform:translateY(-2px); box-shadow:0 14px 38px -8px var(--glow); }
+.btn-ghost{ color:var(--ink); border-color:var(--line); background:var(--panel); }
+.btn-ghost:hover{ border-color:color-mix(in oklab,var(--accent) 50%, var(--line)); transform:translateY(-2px); }
+
+/* hero state selector */
+.statepick{ margin-top:34px; }
+.statepick .label{ font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.22em;
+  text-transform:uppercase; color:var(--ink-mute); margin-bottom:11px; }
+.segmented{
+  display:inline-flex; padding:5px; gap:4px; border-radius:14px;
+  background:var(--panel); border:1px solid var(--line);
+  flex-wrap:wrap;
+}
+.seg{
+  font-family:"IBM Plex Mono",monospace; font-size:13px; letter-spacing:.02em;
+  display:inline-flex; align-items:center; gap:8px;
+  padding:9px 15px; border-radius:10px; border:0; cursor:pointer;
+  background:transparent; color:var(--ink-soft); transition:color .3s, background .3s;
+}
+.seg .swatch{ width:9px; height:9px; border-radius:50%; transition:box-shadow .3s; }
+.seg[data-k="signal-day"] .swatch{ background:#6fcfc8; }
+.seg[data-k="signal-moonlight"] .swatch{ background:#57b9b6; }
+.seg[data-k="drift"]  .swatch{ background:#b29bff; }
+.seg[data-k="forge"]  .swatch{ background:#e0a45c; }
+.seg[data-k="hearth"] .swatch{ background:#c98a4e; }
+.seg[data-k="havens-day"] .swatch{ background:#d8be6e; }
+.seg[data-k="havens-moonlight"] .swatch{ background:#8ea3c4; }
+.seg:hover{ color:var(--ink); }
+.seg[aria-pressed="true"]{
+  background:color-mix(in oklab, var(--accent) 16%, transparent);
+  color:var(--ink);
+}
+.seg[aria-pressed="true"] .swatch{ box-shadow:0 0 0 3px color-mix(in oklab, var(--accent) 30%, transparent); }
+
+/* ---- hero cognitive field (live visualization) ---- */
+.cog{
+  position:relative; aspect-ratio:1/1; width:100%; max-width:460px; margin-inline:auto;
+  border-radius:24px; overflow:hidden;
+  border:1px solid var(--line);
+  background:radial-gradient(120% 120% at 50% 18%, color-mix(in oklab,var(--accent) 14%, transparent), transparent 60%), var(--bg-2);
+  box-shadow:0 40px 90px -40px var(--glow), inset 0 1px 0 rgba(255,255,255,.04);
+}
+.cog svg{ position:absolute; inset:0; width:100%; height:100%; }
+.cog .ring{ fill:none; stroke:var(--accent); opacity:.5; transition:stroke .9s var(--ease); }
+.cog .ring.r2{ opacity:.28; } .cog .ring.r3{ opacity:.16; }
+.cog .core{ fill:var(--accent); filter:blur(2px); transition:fill .9s var(--ease); }
+.cog .spoke{ stroke:var(--accent-hi); opacity:.5; transition:stroke .9s var(--ease); }
+.cog .read{
+  position:absolute; left:20px; bottom:18px; right:20px;
+  font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--ink-soft);
+  display:flex; justify-content:space-between; letter-spacing:.04em;
+}
+.cog .read b{ color:var(--accent-hi); font-weight:500; transition:color .9s var(--ease); }
+@media (prefers-reduced-motion:no-preference){
+  .cog .pulse{ animation:breathe 6s var(--ease) infinite; transform-origin:center; }
+  .cog .pulse.d2{ animation-delay:-2s; } .cog .pulse.d3{ animation-delay:-4s; }
+  .cog .rotor{ animation:rotor 38s linear infinite; transform-origin:center; }
+}
+@keyframes breathe{ 0%,100%{ transform:scale(.96); opacity:.5;} 50%{ transform:scale(1.05); opacity:.9;} }
+@keyframes rotor{ to{ transform:rotate(360deg);} }
+
+/* ============================================================
+   6. MANIFESTO
+   ============================================================ */
+.manifesto blockquote{
+  font-family:"Fraunces",serif; font-weight:300; font-style:italic;
+  font-size:clamp(1.5rem,3.4vw,2.5rem); line-height:1.24; letter-spacing:-.015em;
+  margin:0; max-width:24ch; color:var(--ink);
+  border:0; padding:0;
+}
+.manifesto blockquote span{ color:var(--accent-hi); font-style:normal; transition:color .8s var(--ease); }
+.manifesto .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:40px; align-items:end; margin-top:30px; }
+@media(max-width:760px){ .manifesto .grid2{ grid-template-columns:1fr; } }
+
+/* ============================================================
+   7. COGNITIVE STATE PANELS — live previews
+   ============================================================ */
+.states-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:22px; margin-top:42px; }
+@media(max-width:780px){ .states-grid{ grid-template-columns:1fr; } }
+.state-card{
+  border:1px solid var(--line); border-radius:var(--radius); overflow:hidden;
+  background:var(--panel); transition:transform .4s var(--ease-out), border-color .4s, box-shadow .4s;
+}
+.state-card:hover{ transform:translateY(-4px); border-color:rgba(255,255,255,.16); box-shadow:0 30px 70px -45px #000; }
+.preview{ position:relative; height:184px; overflow:hidden; background:#05060a; }
+.preview .tag{
+  position:absolute; left:14px; top:12px; z-index:3;
+  font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.18em; text-transform:uppercase;
+  padding:4px 9px; border-radius:999px; color:#0a0a0a; font-weight:600;
+}
+.state-body{ padding:20px 22px 24px; }
+.state-body h3{ font-family:"Fraunces",serif; font-weight:400; font-size:1.5rem; margin:0 0 6px; letter-spacing:-.01em; }
+.state-body p{ color:var(--ink-soft); font-size:.97rem; margin:0; }
+.state-body .meta{ margin-top:14px; display:flex; gap:18px; font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--ink-mute); letter-spacing:.04em; }
+.state-body .meta b{ color:var(--ink); font-weight:500; }
+
+/* preview tag colors per environment */
+.preview .tag.t-sigday { background:#6fcfc8; } .preview .tag.t-sigmoon{ background:#57b9b6; }
+.preview .tag.t-drift  { background:#b29bff; } .preview .tag.t-forge  { background:#e0a45c; }
+.preview .tag.t-hearth { background:#c98a4e; } .preview .tag.t-hday   { background:#d8be6e; }
+.preview .tag.t-hmoon  { background:#8ea3c4; color:#0a0a0a; }
+
+/* image-backed previews — the real reference art, with depth + a slow sheen */
+.preview.img{ background-size:cover; background-position:center; }
+.preview.img::before{ content:""; position:absolute; inset:0; z-index:1;
+  background:linear-gradient(180deg, rgba(6,7,11,.10) 0%, transparent 30%, rgba(6,7,11,.45) 100%); }
+.preview.img::after{ content:""; position:absolute; inset:0; z-index:2; pointer-events:none;
+  background:linear-gradient(115deg, transparent 35%, rgba(255,255,255,.07) 50%, transparent 65%);
+  background-size:260% 100%; }
+.state-card:hover .preview.img{ transform:scale(1.03); }
+.preview.img{ transition:transform 1.6s var(--ease-out); }
+@media(prefers-reduced-motion:no-preference){ .state-card:hover .preview.img::after{ animation:sheen 1.6s var(--ease); } }
+@keyframes sheen{ from{ background-position:200% 0; } to{ background-position:-60% 0; } }
+.preview.pending{ background:radial-gradient(120% 120% at 30% 20%, #140e2c, #07080b 70%); display:flex; align-items:flex-end; }
+.preview.pending .stub{ position:absolute; left:14px; bottom:12px; z-index:3;
+  font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-mute); }
+.preview .tag{ z-index:4; }
+
+/* group divider label inside the states grid */
+.grp{ grid-column:1/-1; display:flex; align-items:center; gap:14px; margin:8px 0 -4px;
+  font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-mute); }
+.grp::after{ content:""; flex:1; height:1px; background:var(--line); }
+.grp .twin{ color:var(--accent-hi); transition:color .8s var(--ease); }
+
+/* nervous-system + failure-mode line on each state card */
+.ns-line{ margin-top:14px; font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.04em; color:var(--ink-mute); }
+.ns-line b{ color:var(--accent-hi); font-weight:500; transition:color .8s var(--ease); }
+.ns-line .guard{ color:var(--ink-soft); }
+
+/* ============================================================
+   8. CIRCADIAN TIMELINE + DAY-IN-THE-LIFE
+   ============================================================ */
+.day-wrap{
+  margin-top:42px; border:1px solid var(--line); border-radius:24px; overflow:hidden;
+  background:linear-gradient(180deg, var(--bg-2), var(--bg));
+}
+.day-grid{ display:grid; grid-template-columns:1.15fr .85fr; }
+@media(max-width:900px){ .day-grid{ grid-template-columns:1fr; } }
+
+/* the desktop mockup */
+.desktop{ position:relative; aspect-ratio:16/11; margin:18px; border-radius:16px; overflow:hidden;
+  border:1px solid rgba(255,255,255,.10);
+  box-shadow:0 50px 90px -50px #000, inset 0 1px 0 rgba(255,255,255,.06);
+  background:linear-gradient(165deg, color-mix(in oklab,var(--accent) 40%, #0a0c12), #06070a 75%);
+  transition:background 1s var(--ease);
+}
+.dsk-bar{ position:absolute; top:0; left:0; right:0; height:26px; z-index:5;
+  display:flex; align-items:center; gap:12px; padding:0 12px;
+  background:rgba(8,9,12,.55); backdrop-filter:blur(8px);
+  font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--ink-soft); }
+.dsk-bar .apple{ width:10px; height:10px; border-radius:2px; background:var(--ink-soft); opacity:.8; }
+.dsk-bar .focus{ margin-left:auto; display:flex; align-items:center; gap:6px; color:var(--accent-hi); transition:color 1s var(--ease); }
+.dsk-bar .focus .d{ width:7px; height:7px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--glow); transition:background 1s var(--ease); }
+.dsk-window{ position:absolute; left:14%; top:30%; width:54%; border-radius:10px; overflow:hidden;
+  border:1px solid rgba(255,255,255,.14); background:rgba(10,12,16,.78); backdrop-filter:blur(6px);
+  box-shadow:0 30px 60px -30px #000; transition:transform .9s var(--ease), opacity .6s; }
+.dsk-window .wbar{ height:22px; display:flex; align-items:center; gap:5px; padding:0 9px; background:rgba(255,255,255,.05); }
+.dsk-window .wbar i{ width:8px; height:8px; border-radius:50%; }
+.dsk-window .wbar i:nth-child(1){ background:#ff5f57;} .dsk-window .wbar i:nth-child(2){ background:#febc2e;} .dsk-window .wbar i:nth-child(3){ background:#28c840;}
+.dsk-window .wbar span{ margin-left:8px; font-family:"IBM Plex Mono",monospace; font-size:9.5px; color:var(--ink-mute); }
+.dsk-window .wbody{ padding:12px 13px; }
+.dsk-window .wtitle{ font-family:"Fraunces",serif; font-size:15px; color:var(--ink); margin-bottom:8px; }
+.dsk-window .line{ height:6px; border-radius:3px; background:rgba(255,255,255,.10); margin:6px 0; }
+.dsk-window .line.a{ width:90%;} .dsk-window .line.b{ width:70%; } .dsk-window .line.c{ width:80%; }
+.dsk-window .line.hi{ background:color-mix(in oklab,var(--accent) 60%, transparent); width:40%; }
+.dsk-toast{ position:absolute; right:5%; top:36%; width:33%; padding:10px 12px; border-radius:12px;
+  background:rgba(14,16,22,.92); border:1px solid rgba(255,255,255,.12);
+  box-shadow:0 20px 40px -20px #000; font-size:11px; color:var(--ink-soft);
+  transition:opacity .6s var(--ease), transform .6s var(--ease); }
+.dsk-toast.hidden{ opacity:0; transform:translateY(-8px); pointer-events:none; }
+.dsk-toast b{ display:block; color:var(--ink); font-weight:500; margin-bottom:2px; font-family:"IBM Plex Sans"; }
+.dsk-dock{ position:absolute; left:50%; bottom:10px; transform:translateX(-50%); z-index:5;
+  display:flex; gap:7px; padding:6px 9px; border-radius:14px;
+  background:rgba(8,9,12,.5); backdrop-filter:blur(8px); border:1px solid rgba(255,255,255,.10); }
+.dsk-dock i{ width:22px; height:22px; border-radius:7px; background:linear-gradient(160deg,rgba(255,255,255,.22),rgba(255,255,255,.04)); }
+.dsk-dock i.on{ background:linear-gradient(160deg,var(--accent),var(--accent-hi)); box-shadow:0 0 12px var(--glow); transition:background 1s var(--ease); }
+
+/* control side */
+.day-ctrl{ padding:26px 28px 28px; border-left:1px solid var(--line); display:flex; flex-direction:column; }
+@media(max-width:900px){ .day-ctrl{ border-left:0; border-top:1px solid var(--line); } }
+.day-ctrl h3{ font-family:"Fraunces",serif; font-weight:400; font-size:1.5rem; margin:0 0 4px; }
+.day-now{ font-family:"IBM Plex Mono",monospace; font-size:13px; color:var(--ink-soft); margin-bottom:18px; }
+.day-now b{ color:var(--accent-hi); transition:color .8s var(--ease); }
+
+/* energy curve timeline */
+.track{ position:relative; margin:8px 0 4px; }
+.track svg{ width:100%; height:88px; display:block; overflow:visible; }
+.track .curve{ fill:none; stroke:var(--accent); stroke-width:2; opacity:.85; transition:stroke .8s var(--ease); filter:drop-shadow(0 4px 10px var(--glow)); }
+.track .area{ fill:url(#areaGrad); opacity:.25; }
+.track .head{ fill:var(--accent-hi); transition:fill .8s var(--ease); }
+.track .headline{ stroke:var(--accent-hi); stroke-width:1; opacity:.5; }
+.track .band{ font-family:"IBM Plex Mono",monospace; font-size:9px; fill:var(--ink-mute); }
+.scrubber{ width:100%; margin:14px 0 6px; accent-color:var(--accent); cursor:pointer; }
+.hours{ display:flex; justify-content:space-between; font-family:"IBM Plex Mono",monospace; font-size:10px; color:var(--ink-mute); }
+.day-buttons{ margin-top:18px; display:flex; gap:10px; align-items:center; }
+.state-readout{ margin-top:20px; padding:14px 16px; border-radius:12px; background:var(--panel); border:1px solid var(--line); }
+.state-readout .k{ font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.16em; text-transform:uppercase; color:var(--ink-mute); }
+.state-readout .v{ font-family:"Fraunces",serif; font-size:1.45rem; color:var(--accent-hi); transition:color .8s var(--ease); margin:2px 0 6px; }
+.state-readout .d{ font-size:.92rem; color:var(--ink-soft); }
+
+/* ============================================================
+   9. ARCHITECTURE DIAGRAM
+   ============================================================ */
+.arch-wrap{ margin-top:42px; border:1px solid var(--line); border-radius:24px; padding:30px 26px;
+  background:linear-gradient(180deg,var(--bg-2),var(--bg)); }
+.arch svg{ width:100%; height:auto; display:block; }
+.arch .nbox{ fill:rgba(255,255,255,.025); stroke:var(--line); }
+.arch .nbox.engine{ stroke:var(--accent); fill:color-mix(in oklab,var(--accent) 10%, transparent); transition:stroke .8s,fill .8s; }
+.arch .nt{ fill:var(--ink); font-family:"IBM Plex Sans"; font-weight:500; font-size:15px; }
+.arch .ns{ fill:var(--ink-mute); font-family:"IBM Plex Mono",monospace; font-size:11px; }
+.arch .wire{ stroke:var(--line); stroke-width:1.5; fill:none; }
+.arch .pulse-wire{ stroke:var(--accent); stroke-width:1.8; fill:none; stroke-dasharray:5 9; opacity:.9; transition:stroke .8s var(--ease); }
+@media(prefers-reduced-motion:no-preference){ .arch .pulse-wire{ animation:dash 2.6s linear infinite; } }
+
+/* ============================================================
+   10. ROADMAP
+   ============================================================ */
+.road{ display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-top:42px; }
+@media(max-width:780px){ .road{ grid-template-columns:1fr; } }
+.road-card{ border:1px solid var(--line); border-radius:var(--radius); padding:24px; background:var(--panel); position:relative; overflow:hidden; }
+.road-card::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:linear-gradient(var(--accent),transparent); transition:background .8s var(--ease); }
+.road-card .ver{ font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--accent-hi); letter-spacing:.08em; transition:color .8s var(--ease); }
+.road-card h3{ font-family:"Fraunces",serif; font-weight:400; font-size:1.3rem; margin:8px 0 8px; }
+.road-card p{ color:var(--ink-soft); font-size:.95rem; margin:0; }
+
+/* ============================================================
+   11. FOOTER
+   ============================================================ */
+footer{ width:var(--shell); margin:60px auto 0; padding:46px 0 70px; border-top:1px solid var(--line); }
+footer .ftop{ display:flex; justify-content:space-between; gap:30px; flex-wrap:wrap; align-items:baseline; }
+footer h3{ font-family:"Fraunces",serif; font-weight:300; font-size:2rem; margin:0; letter-spacing:-.02em; }
+footer p{ color:var(--ink-soft); max-width:40ch; margin:6px 0 0; }
+footer .meta{ font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--ink-mute); margin-top:30px; display:flex; gap:20px; flex-wrap:wrap; }
+footer a{ color:var(--accent-hi); text-decoration:none; transition:color .8s var(--ease); }
+footer a:hover{ text-decoration:underline; }
+
+/* ============================================================
+   12. SCROLL REVEAL + FOCUS
+   ============================================================ */
+.reveal{ opacity:0; transform:translateY(22px); transition:opacity .8s var(--ease-out), transform .8s var(--ease-out); }
+.reveal.in{ opacity:1; transform:none; }
+@media(prefers-reduced-motion:reduce){
+  .reveal{ opacity:1; transform:none; transition:none; }
+  *{ animation:none !important; }
+  html{ scroll-behavior:auto; }
+}
+:focus-visible{ outline:2px solid var(--accent-hi); outline-offset:3px; border-radius:4px; }
+::selection{ background:color-mix(in oklab,var(--accent) 40%, transparent); color:var(--ink); }
+</style>
+</head>
+
+<body>
+<div class="field" aria-hidden="true"></div>
+<div class="scene-bg" id="scene-bg" aria-hidden="true"></div>
+<div class="drift-x" aria-hidden="true"></div>
+<div class="grain" aria-hidden="true"></div>
+
+<!-- ===== MENU BAR ===== -->
+<div class="menubar" role="banner">
+  <span class="traffic" aria-hidden="true"><i></i><i></i><i></i></span>
+  <span class="brand">Fellowship</span>
+  <span class="sep hide-sm">·</span>
+  <span class="hide-sm">Cognitive State OS</span>
+  <span class="right">
+    <span class="pill"><span class="dot"></span><span id="bar-state">Signal</span></span>
+    <span class="clock" id="bar-clock" aria-label="current state time">09:00</span>
+  </span>
+</div>
+
+<!-- ===== HERO ===== -->
+<section class="hero" aria-label="Introduction">
+  <div class="hero-grid">
+    <div>
+      <span class="eyebrow reveal">v1.1 · building in public</span>
+      <h1 class="reveal">The computer that <em>knows which mind</em> showed up today.</h1>
+      <p class="lede reveal">Fellowship is a cognitive-state operating layer for modern computing. It turns devices from passive tools into adaptive environments that respond to focus, energy, attention, and intent — so technology adapts to the human behind the keyboard, not the other way around.</p>
+
+      <div class="hero-cta reveal">
+        <a class="btn btn-primary" href="#day">See a day in the life</a>
+        <a class="btn btn-ghost" href="#states">Explore the four states</a>
+      </div>
+
+      <div class="statepick reveal">
+        <div class="label">Set the room</div>
+        <div class="segmented" role="group" aria-label="Choose a cognitive environment">
+          <button class="seg" data-k="signal-day"       aria-pressed="false"><span class="swatch"></span>Signal · Day</button>
+          <button class="seg" data-k="signal-moonlight"  aria-pressed="false"><span class="swatch"></span>Signal · Night</button>
+          <button class="seg" data-k="drift"             aria-pressed="false"><span class="swatch"></span>Drift</button>
+          <button class="seg" data-k="forge"             aria-pressed="false"><span class="swatch"></span>Forge</button>
+          <button class="seg" data-k="hearth"            aria-pressed="false"><span class="swatch"></span>Hearth</button>
+          <button class="seg" data-k="havens-day"        aria-pressed="true"><span class="swatch"></span>Havens · Day</button>
+          <button class="seg" data-k="havens-moonlight"  aria-pressed="false"><span class="swatch"></span>Havens · Night</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- live cognitive field -->
+    <div class="cog reveal" role="img" aria-label="Live cognitive field visualization reflecting the selected state">
+      <svg viewBox="0 0 400 400" aria-hidden="true">
+        <g class="rotor">
+          <line class="spoke" x1="200" y1="60" x2="200" y2="340" stroke-width="1"/>
+          <line class="spoke" x1="60" y1="200" x2="340" y2="200" stroke-width="1"/>
+          <line class="spoke" x1="100" y1="100" x2="300" y2="300" stroke-width=".6"/>
+          <line class="spoke" x1="300" y1="100" x2="100" y2="300" stroke-width=".6"/>
+        </g>
+        <circle class="ring r3 pulse d3" cx="200" cy="200" r="160" stroke-width="1"/>
+        <circle class="ring r2 pulse d2" cx="200" cy="200" r="115" stroke-width="1.2"/>
+        <circle class="ring r1 pulse"    cx="200" cy="200" r="70"  stroke-width="1.6"/>
+        <circle class="core pulse" cx="200" cy="200" r="22"/>
+      </svg>
+      <div class="read">
+        <span>state · <b id="cog-state">signal</b></span>
+        <span>focus <b id="cog-focus">0.74</b></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== MANIFESTO ===== -->
+<section class="manifesto" aria-label="Why Fellowship exists">
+  <span class="eyebrow reveal">Why Fellowship exists</span>
+  <div class="grid2">
+    <blockquote class="reveal">Today's systems optimize for notifications and engagement. Fellowship optimizes for <span>human cognition.</span></blockquote>
+    <p class="lede reveal">By combining environmental signals, time-of-day awareness, and workflow context, Fellowship creates a living interface that supports deep work, creative wandering, learning, and recovery. Computers should understand when you're building, when you're exploring, when you're learning, and when you're resting — and shape themselves accordingly.</p>
+  </div>
+</section>
+
+<!-- ===== STATES ===== -->
+<section id="states" aria-label="Cognitive environments">
+  <span class="eyebrow reveal">Five modes · seven environments</span>
+  <h2 class="head reveal">Each environment is drawn, not styled. Two turn with the day.</h2>
+  <p class="lede reveal">Every environment is a coordinated atmosphere — a target nervous-system state, a light strategy that supports it, and a specific failure it's calibrated against. Signal and Havens each carry a Day and a Night rendering; the previews below are the reference art itself.</p>
+
+  <div class="states-grid">
+
+    <div class="grp reveal">Signal — receptive learning · <span class="twin">day &amp; night</span></div>
+
+    <!-- SIGNAL · DAY -->
+    <article class="state-card reveal">
+      <div class="preview img" aria-hidden="true" style="background-image:url('constellations%20emerge%20over%20lightfall.png')">
+        <span class="tag t-sigday">Signal · Day</span>
+      </div>
+      <div class="state-body">
+        <h3>Signal · Day</h3>
+        <p>Constellations over lightfall. Calm, receptive learning — soft mid contrast holds the nervous system parasympathetic while references surface.</p>
+        <div class="meta"><span>peak · <b>11:00</b></span><span>arousal · <b>parasympathetic</b></span></div>
+        <div class="ns-line"><b>soft mid contrast</b> · <span class="guard">tuned against drowsiness</span></div>
+      </div>
+    </article>
+
+    <!-- SIGNAL · MOONLIGHT -->
+    <article class="state-card reveal">
+      <div class="preview img" aria-hidden="true" style="background-image:url('twilight%20waits%20for%20no%20one.png')">
+        <span class="tag t-sigmoon">Signal · Night</span>
+      </div>
+      <div class="state-body">
+        <h3>Signal · Moonlight</h3>
+        <p>Twilight waits for no one. The same receptive calm, dimmed for low light — the beam narrows, the field cools, the eyes rest.</p>
+        <div class="meta"><span>peak · <b>04:30</b></span><span>arousal · <b>parasympathetic</b></span></div>
+        <div class="ns-line"><b>dim teal · low contrast</b> · <span class="guard">tuned against drowsiness</span></div>
+      </div>
+    </article>
+
+    <div class="grp reveal">The working modes</div>
+
+    <!-- DRIFT -->
+    <article class="state-card reveal">
+      <div class="preview pending" aria-hidden="true">
+        <span class="tag t-drift">Drift</span>
+        <span class="stub">reference pending</span>
+      </div>
+      <div class="state-body">
+        <h3>Drift</h3>
+        <p>Light-arousal exploration. High luminance and open gradients keep associative thinking moving; capture stays frictionless. (Art still to come.)</p>
+        <div class="meta"><span>peak · <b>16:30</b></span><span>arousal · <b>light</b></span></div>
+        <div class="ns-line"><b>high luminance · open gradients</b> · <span class="guard">tuned against eye fatigue</span></div>
+      </div>
+    </article>
+
+    <!-- FORGE -->
+    <article class="state-card reveal">
+      <div class="preview img" aria-hidden="true" style="background-image:url('forged%20in%20deep%20shadow.png')">
+        <span class="tag t-forge">Forge</span>
+      </div>
+      <div class="state-body">
+        <h3>Forge</h3>
+        <p>Forged in deep shadow. Hyperfocus execution — the field drops to low luminance and a single narrow highlight holds the task.</p>
+        <div class="meta"><span>peak · <b>14:00</b></span><span>arousal · <b>hyperfocus</b></span></div>
+        <div class="ns-line"><b>low luminance · narrow highlights</b> · <span class="guard">tuned against tunnel collapse</span></div>
+      </div>
+    </article>
+
+    <!-- HEARTH -->
+    <article class="state-card reveal">
+      <div class="preview img" aria-hidden="true" style="background-image:url('hearth%20heart%20home.jpeg')">
+        <span class="tag t-hearth">Hearth</span>
+      </div>
+      <div class="state-body">
+        <h3>Hearth</h3>
+        <p>Hearth, heart, home. Sustained attention — neutral mid tones and gentle contrast hold focus over the long evening stretch.</p>
+        <div class="meta"><span>peak · <b>20:00</b></span><span>arousal · <b>sustained</b></span></div>
+        <div class="ns-line"><b>neutral mid · gentle contrast</b> · <span class="guard">tuned against visual monotony</span></div>
+      </div>
+    </article>
+
+    <div class="grp reveal">Havens — sanctuary &amp; closure · <span class="twin">day &amp; night</span></div>
+
+    <!-- HAVENS · DAY -->
+    <article class="state-card reveal">
+      <div class="preview img" aria-hidden="true" style="background-image:url('Ethereal%20light%20in%20the%20golden%20forest.png')">
+        <span class="tag t-hday">Havens · Day</span>
+      </div>
+      <div class="state-body">
+        <h3>Havens · Day</h3>
+        <p>Ethereal light in the golden forest. The daylight sanctuary — luminous, open, asking nothing. Where you go when you step away.</p>
+        <div class="meta"><span>peak · <b>08:30</b></span><span>arousal · <b>idle / restorative</b></span></div>
+        <div class="ns-line"><b>high luminance · soft drift</b> · <span class="guard">tuned against over-softening</span></div>
+      </div>
+    </article>
+
+    <!-- HAVENS · MOONLIGHT -->
+    <article class="state-card reveal">
+      <div class="preview img" aria-hidden="true" style="background-image:url('moonlit%20haven.png.jpeg')">
+        <span class="tag t-hmoon">Havens · Night</span>
+      </div>
+      <div class="state-body">
+        <h3>Havens · Moonlight</h3>
+        <p>Moonlit haven. Closure — a cool, dim glow off the water for the end of the day. Enough to see by, never enough to wake you.</p>
+        <div class="meta"><span>peak · <b>23:00</b></span><span>arousal · <b>closure</b></span></div>
+        <div class="ns-line"><b>cool low glow</b> · <span class="guard">tuned against overstimulating highlights</span></div>
+      </div>
+    </article>
+  </div>
+</section>
+
+<!-- ===== DAY IN THE LIFE ===== -->
+<section id="day" aria-label="A day in the life">
+  <span class="eyebrow reveal">Circadian router · interactive</span>
+  <h2 class="head reveal">Scrub through a day. Watch the machine follow.</h2>
+  <p class="lede reveal">Fellowship reads energy rhythms, schedule, and workflow context, then transitions environments — wallpaper, focus mode, surfaced tools, notification posture — as one coordinated move. Drag the timeline or press play.</p>
+
+  <div class="day-wrap reveal">
+    <div class="day-grid">
+      <!-- desktop mockup -->
+      <div class="desktop" id="desktop" role="img" aria-label="macOS-style desktop adapting to the current cognitive state">
+        <div class="dsk-bar">
+          <span class="apple"></span><span></span>
+          <span class="focus"><span class="d"></span><span id="dsk-focus">Signal Focus</span></span>
+        </div>
+        <div class="dsk-window" id="dsk-window">
+          <div class="wbar"><i></i><i></i><i></i><span id="dsk-app">References — Signal</span></div>
+          <div class="wbody">
+            <div class="wtitle" id="dsk-wtitle">Knowledge graph</div>
+            <div class="line a"></div><div class="line hi"></div><div class="line b"></div><div class="line c"></div>
+          </div>
+        </div>
+        <div class="dsk-toast" id="dsk-toast">
+          <b id="toast-title">Morning brief ready</b>
+          <span id="toast-body">3 references queued from yesterday's reading.</span>
+        </div>
+        <div class="dsk-dock" aria-hidden="true">
+          <i></i><i class="on"></i><i></i><i></i><i></i>
+        </div>
+      </div>
+
+      <!-- controls -->
+      <div class="day-ctrl">
+        <h3>The circadian router</h3>
+        <div class="day-now">time <b id="now-time">09:00</b> · <span id="now-state">Signal</span></div>
+
+        <div class="track" aria-hidden="true">
+          <svg viewBox="0 0 600 110" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="var(--accent)" stop-opacity=".5"/>
+                <stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path class="area" id="energy-area" d=""></path>
+            <path class="curve" id="energy-curve" d=""></path>
+            <line class="headline" id="head-line" x1="0" y1="0" x2="0" y2="110"></line>
+            <circle class="head" id="head-dot" cx="0" cy="0" r="5"></circle>
+          </svg>
+        </div>
+
+        <input class="scrubber" id="scrubber" type="range" min="0" max="1439" value="510"
+               aria-label="Time of day in minutes" />
+        <div class="hours"><span>00</span><span>06</span><span>12</span><span>18</span><span>24</span></div>
+
+        <div class="day-buttons">
+          <button class="btn btn-primary" id="play-btn">► Play day</button>
+          <button class="btn btn-ghost" id="reset-btn">Reset</button>
+        </div>
+
+        <div class="state-readout" aria-live="polite">
+          <div class="k">active environment</div>
+          <div class="v" id="ro-name">Signal</div>
+          <div class="d" id="ro-desc">Calm, receptive learning. Curated references surface; chat goes quiet.</div>
+          <div class="ns-line" style="margin-top:10px"><b id="ro-ns">parasympathetic calm</b> · <span class="guard" id="ro-guard">tuned against drowsiness</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== ARCHITECTURE ===== -->
+<section aria-label="Core architecture">
+  <span class="eyebrow reveal">Core architecture</span>
+  <h2 class="head reveal">Signals in. A coherent environment out.</h2>
+  <p class="lede reveal">Fellowship's value isn't isolated automations — it's the State Engine that resolves many signals into one meaningful transition. Everything downstream moves together.</p>
+
+  <div class="arch-wrap reveal">
+    <div class="arch">
+      <svg viewBox="0 0 920 300" role="img" aria-label="Architecture diagram: environmental, time and context signals feed the Circadian Router, which feeds the State Engine, which drives the Adaptive Workspace Layer and Memory and Recall.">
+        <!-- wires -->
+        <path class="wire" d="M190 70 H300"/><path class="wire" d="M190 150 H300"/><path class="wire" d="M190 230 H300"/>
+        <path class="pulse-wire" d="M190 70 H300"/>
+        <path class="pulse-wire" d="M190 150 H300"/>
+        <path class="pulse-wire" d="M190 230 H300"/>
+        <path class="wire" d="M470 150 H560"/>
+        <path class="pulse-wire" d="M470 150 H560"/>
+        <path class="wire" d="M730 150 V90 H780"/><path class="wire" d="M730 150 V210 H780"/>
+        <path class="pulse-wire" d="M730 150 V90 H780"/>
+        <path class="pulse-wire" d="M730 150 V210 H780"/>
+
+        <!-- signal inputs -->
+        <g>
+          <rect class="nbox" x="20" y="44" width="170" height="52" rx="11"/>
+          <text class="nt" x="36" y="70">Environment</text><text class="ns" x="36" y="86">light · sound · place</text>
+          <rect class="nbox" x="20" y="124" width="170" height="52" rx="11"/>
+          <text class="nt" x="36" y="150">Time</text><text class="ns" x="36" y="166">circadian · schedule</text>
+          <rect class="nbox" x="20" y="204" width="170" height="52" rx="11"/>
+          <text class="nt" x="36" y="230">Context</text><text class="ns" x="36" y="246">app · project · intent</text>
+        </g>
+
+        <!-- router -->
+        <rect class="nbox" x="300" y="120" width="170" height="60" rx="13"/>
+        <text class="nt" x="320" y="148">Circadian Router</text><text class="ns" x="320" y="166">weighs &amp; debounces</text>
+
+        <!-- engine -->
+        <rect class="nbox engine" x="560" y="116" width="170" height="68" rx="14"/>
+        <text class="nt" x="582" y="146">State Engine</text><text class="ns" x="582" y="164">resolves → transition</text>
+
+        <!-- outputs -->
+        <rect class="nbox" x="780" y="60" width="160" height="60" rx="12"/>
+        <text class="nt" x="798" y="86">Workspace Layer</text><text class="ns" x="798" y="104">focus · layout · UI</text>
+        <rect class="nbox" x="780" y="180" width="160" height="60" rx="12"/>
+        <text class="nt" x="798" y="206">Memory &amp; Recall</text><text class="ns" x="798" y="224">ideas · notes · graph</text>
+      </svg>
+    </div>
+  </div>
+</section>
+
+<!-- ===== ROADMAP ===== -->
+<section aria-label="Roadmap">
+  <span class="eyebrow reveal">Roadmap</span>
+  <h2 class="head reveal">Shipping in the open.</h2>
+  <div class="road">
+    <div class="road-card reveal"><div class="ver">v1.1 — now</div><h3>The State Layer</h3><p>State definitions, focus transitions, wallpaper orchestration, and shortcut integration on macOS.</p></div>
+    <div class="road-card reveal"><div class="ver">v2.0 — next</div><h3>Semantic Memory</h3><p>Memory routing, knowledge-graph awareness, and project surfaces that recall what you were holding.</p></div>
+    <div class="road-card reveal"><div class="ver">v3.0 — horizon</div><h3>Cognitive Continuity</h3><p>One state that follows you across Mac, iPad, iPhone, and whatever interface comes next.</p></div>
+  </div>
+</section>
+
+<!-- ===== FOOTER ===== -->
+<footer>
+  <div class="ftop">
+    <div>
+      <h3>Fellowship</h3>
+      <p>Building technology that remembers the person inside the process.</p>
+    </div>
+    <div class="hero-cta">
+      <a class="btn btn-primary" href="#day">Request early access</a>
+    </div>
+  </div>
+  <div class="meta">
+    <span>Cognitive State OS · 2026</span>
+    <span>Made in Durham, NC</span>
+    <a href="#states">States</a><a href="#day">Day in the life</a><a href="#">GitHub</a>
+  </div>
+</footer>
+
+<script>
+/* ============================================================
+   STATE MODEL — single source of truth for theming + content
+   ============================================================ */
+/* img: reference art (URL-encoded, same folder as this file). null = pending. */
+const STATES = {
+  "signal-day": { name:"Signal · Day", focus:"Signal Focus", app:"References — Signal", wtitle:"Knowledge graph",
+            toastT:"Morning brief ready", toastB:"3 references queued from yesterday's reading.",
+            desc:"Calm, receptive learning. Soft mid contrast; references surface, chat goes quiet.",
+            ns:"parasympathetic calm", guard:"tuned against drowsiness",
+            img:"constellations%20emerge%20over%20lightfall.png", f:0.62 },
+  "signal-moonlight": { name:"Signal · Moonlight", focus:"Signal — Low Light", app:"References — Signal", wtitle:"Knowledge graph",
+            toastT:"Still here, dimmed", toastB:"Same calm, lower light — the beam has narrowed.",
+            desc:"Receptive calm, dimmed for low light. The field cools; the eyes rest.",
+            ns:"parasympathetic calm", guard:"tuned against drowsiness",
+            img:"twilight%20waits%20for%20no%20one.png", f:0.50 },
+  drift:  { name:"Drift", focus:"Drift — Soft Signals", app:"Canvas — Drift", wtitle:"Idea canvas",
+            toastT:"Captured a thought", toastB:"Linked to 2 nearby notes automatically.",
+            desc:"Light-arousal exploration. High luminance, open gradients, sideways links.",
+            ns:"light arousal", guard:"tuned against eye fatigue",
+            img:null, f:0.70 },
+  forge:  { name:"Forge", focus:"Forge — Do Not Disturb", app:"Editor — Forge", wtitle:"Deep work session",
+            toastT:"Notifications paused", toastB:"Everything non-essential is held until you surface.",
+            desc:"Hyperfocus execution. Low luminance, one narrow highlight, a single task.",
+            ns:"hyperfocus", guard:"tuned against tunnel collapse",
+            img:"forged%20in%20deep%20shadow.png", f:0.94 },
+  hearth: { name:"Hearth", focus:"Hearth — Sustained", app:"Reader — Hearth", wtitle:"Long read",
+            toastT:"Two hours, unbroken", toastB:"Sustained block held; posture stayed gentle.",
+            desc:"Sustained attention. Neutral mid tones and gentle contrast for the long stretch.",
+            ns:"sustained attention", guard:"tuned against visual monotony",
+            img:"hearth%20heart%20home.jpeg", f:0.55 },
+  "havens-day": { name:"Havens · Day", focus:"Havens — Sanctuary", app:"Havens", wtitle:"At ease",
+            toastT:"Stepping away", toastB:"The room relaxes; nothing is asked of you.",
+            desc:"The daylight sanctuary. Luminous and open — present, asking nothing.",
+            ns:"idle / restorative", guard:"tuned against over-softening",
+            img:"Ethereal%20light%20in%20the%20golden%20forest.png", f:0.22 },
+  "havens-moonlight": { name:"Havens · Moonlight", focus:"Havens — Closure", app:"Havens", wtitle:"Goodnight",
+            toastT:"That's a wrap", toastB:"Tomorrow's first block is already set to Signal.",
+            desc:"Closure. A cool, dim glow off the water — enough to see by, never to wake you.",
+            ns:"closure", guard:"tuned against overstimulating highlights",
+            img:"moonlit%20haven.png.jpeg", f:0.10 },
+};
+
+/* schedule of environment across the 1440 minutes of a day */
+const SCHEDULE = [
+  { from:0,       to:5*60,     s:"havens-moonlight" }, // overnight closure
+  { from:5*60,    to:7*60+30,  s:"signal-moonlight" }, // pre-dawn calm
+  { from:7*60+30, to:10*60,    s:"havens-day"       }, // morning sanctuary
+  { from:10*60,   to:12*60,    s:"signal-day"       }, // late-morning learning
+  { from:12*60,   to:15*60+30, s:"forge"            }, // midday execution
+  { from:15*60+30,to:18*60+30, s:"drift"            }, // afternoon creative
+  { from:18*60+30,to:21*60,    s:"hearth"           }, // evening sustained
+  { from:21*60,   to:24*60,    s:"havens-moonlight" }, // wind down to closure
+];
+const stateAt = (min) => (SCHEDULE.find(b => min >= b.from && min < b.to) || SCHEDULE[SCHEDULE.length-1]).s;
+const fmt = (min) => { const h=Math.floor(min/60)%24, m=min%60; return String(h).padStart(2,"0")+":"+String(m).padStart(2,"0"); };
+
+const root = document.documentElement;
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/* ---- apply a state everywhere ---- */
+function applyState(key, { fromScrub=false } = {}){
+  if(!STATES[key]) return;
+  root.dataset.state = key;
+  const S = STATES[key];
+
+  // hero segmented control
+  document.querySelectorAll(".seg").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.k === key)));
+
+  // menu bar + hero field readouts
+  document.getElementById("bar-state").textContent = S.name;
+  document.getElementById("cog-state").textContent = S.name;
+  document.getElementById("cog-focus").textContent = S.f.toFixed(2);
+
+  // scene backdrop + desktop wallpaper = the active environment's reference art
+  const sceneBg = document.getElementById("scene-bg");
+  const desktop = document.getElementById("desktop");
+  if(S.img){
+    const u = `url('${S.img}')`;
+    sceneBg.style.backgroundImage = u; sceneBg.style.opacity = "";
+    desktop.style.backgroundImage =
+      `linear-gradient(180deg, rgba(6,7,11,.10), rgba(6,7,11,.45)), ${u}`;
+    desktop.style.backgroundSize = "cover"; desktop.style.backgroundPosition = "center";
+  }else{
+    sceneBg.style.opacity = "0";            // Drift: no art yet → fall back to gradient field
+    desktop.style.backgroundImage = "";
+  }
+
+  // desktop mockup
+  document.getElementById("dsk-focus").textContent  = S.focus;
+  document.getElementById("dsk-app").textContent    = S.app;
+  document.getElementById("dsk-wtitle").textContent = S.wtitle;
+  document.getElementById("toast-title").textContent= S.toastT;
+  document.getElementById("toast-body").textContent = S.toastB;
+
+  // day readout
+  document.getElementById("now-state").textContent = S.name;
+  document.getElementById("ro-name").textContent   = S.name;
+  document.getElementById("ro-desc").textContent   = S.desc;
+  document.getElementById("ro-ns").textContent     = S.ns;
+  document.getElementById("ro-guard").textContent  = S.guard;
+}
+
+/* segmented control sets state AND parks the scrubber at that state's peak */
+const PEAK = { "signal-day":11*60, "signal-moonlight":4*60+30, drift:16*60+30,
+               forge:14*60, hearth:20*60, "havens-day":8*60+30, "havens-moonlight":23*60 };
+document.querySelectorAll(".seg").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const k = btn.dataset.k;
+    setTime(PEAK[k]);
+    applyState(k);
+  });
+});
+
+/* ============================================================
+   CIRCADIAN TIMELINE — energy curve + scrubber + player
+   ============================================================ */
+const scrubber = document.getElementById("scrubber");
+const headDot  = document.getElementById("head-dot");
+const headLine = document.getElementById("head-line");
+const W = 600, H = 110;
+
+/* build an energy curve: higher midday, dipping overnight, two peaks */
+function energyY(min){
+  const t = min/1440;
+  // base circadian arc + a creative bump
+  const arc = Math.sin((t - 0.18) * Math.PI * 1.0);          // morning rise → evening fall
+  const bump = 0.35 * Math.exp(-Math.pow((t-0.68)/0.10,2));  // late-afternoon creative lift
+  const dip  = 0.25 * Math.exp(-Math.pow((t-0.55)/0.05,2));  // post-lunch dip
+  const e = Math.max(0, Math.min(1, 0.5*arc + bump - dip + 0.42));
+  return H - 12 - e*(H-30);
+}
+(function drawCurve(){
+  let d="", a=`M0 ${H} `;
+  for(let x=0;x<=W;x+=6){ const min=Math.round(x/W*1440); const y=energyY(min);
+    d += (x===0?`M${x} ${y}`:` L${x} ${y}`); a += `L${x} ${y} `; }
+  a += `L${W} ${H} Z`;
+  document.getElementById("energy-curve").setAttribute("d", d);
+  document.getElementById("energy-area").setAttribute("d", a);
+})();
+
+function setTime(min){
+  min = Math.max(0, Math.min(1439, Math.round(min)));
+  scrubber.value = min;
+  const x = min/1440*W, y = energyY(min);
+  headDot.setAttribute("cx", x); headDot.setAttribute("cy", y);
+  headLine.setAttribute("x1", x); headLine.setAttribute("x2", x);
+  headLine.setAttribute("y1", y); headLine.setAttribute("y2", H);
+  document.getElementById("now-time").textContent = fmt(min);
+  document.getElementById("bar-clock").textContent = fmt(min);
+  applyState(stateAt(min), { fromScrub:true });
+}
+
+scrubber.addEventListener("input", () => { stopPlay(); setTime(+scrubber.value); });
+
+/* ---- day player ---- */
+let playing = false, raf = null, last = 0, simMin = 540;
+const playBtn = document.getElementById("play-btn");
+
+function tick(ts){
+  if(!playing) return;
+  if(!last) last = ts;
+  const dt = ts - last; last = ts;
+  simMin += dt * 0.18;            // ~8s to traverse a full day
+  if(simMin >= 1440){ simMin = 0; }
+  setTime(simMin);
+  raf = requestAnimationFrame(tick);
+}
+function startPlay(){
+  if(reduceMotion){ return; }     // honor reduced-motion: no auto-animation
+  playing = true; last = 0; simMin = +scrubber.value;
+  playBtn.textContent = "❚❚ Pause";
+  raf = requestAnimationFrame(tick);
+}
+function stopPlay(){
+  playing = false; if(raf) cancelAnimationFrame(raf);
+  playBtn.textContent = "► Play day";
+}
+playBtn.addEventListener("click", () => playing ? stopPlay() : startPlay());
+document.getElementById("reset-btn").addEventListener("click", () => { stopPlay(); setTime(510); });
+
+/* ============================================================
+   SCROLL REVEAL
+   ============================================================ */
+if(reduceMotion){
+  document.querySelectorAll(".reveal").forEach(el=>el.classList.add("in"));
+}else{
+  const io=new IntersectionObserver((entries)=>{
+    entries.forEach((en,i)=>{ if(en.isIntersecting){ en.target.style.transitionDelay=(i%5*0.06)+"s"; en.target.classList.add("in"); io.unobserve(en.target);} });
+  },{ threshold:0.12 });
+  document.querySelectorAll(".reveal").forEach(el=>io.observe(el));
+}
+
+/* boot */
+setTime(510);          // 08:30 — Havens · Day (sanctuary), the luminous default
+applyState("havens-day");
+</script>
+</body>
+</html>
