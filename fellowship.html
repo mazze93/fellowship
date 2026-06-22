@@ -407,7 +407,40 @@ h2.head{
 @media(prefers-reduced-motion:no-preference){ .arch .pulse-wire{ animation:dash 2.6s linear infinite; } }
 
 /* ============================================================
-   10. ROADMAP
+   10. PACK DOCUMENTATION
+   ============================================================ */
+#pack{ scroll-margin-top:60px; }
+.pack-grid{ display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:42px; }
+@media(max-width:780px){ .pack-grid{ grid-template-columns:1fr; } }
+.pack-card{
+  border:1px solid var(--line); border-radius:var(--radius); padding:26px 28px;
+  background:var(--panel); position:relative; overflow:hidden;
+  transition:transform .4s var(--ease-out), border-color .4s, box-shadow .4s;
+}
+.pack-card:hover{ transform:translateY(-3px); border-color:rgba(255,255,255,.16); box-shadow:0 24px 60px -40px #000; }
+.pack-card::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:3px;
+  background:linear-gradient(var(--accent), transparent); transition:background .8s var(--ease); }
+.pack-card .pc-tag{ font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--accent-hi); margin-bottom:10px; transition:color .8s var(--ease); }
+.pack-card h3{ font-family:"Fraunces",serif; font-weight:400; font-size:1.3rem; margin:0 0 8px; }
+.pack-card p{ color:var(--ink-soft); font-size:.95rem; margin:0 0 14px; line-height:1.6; }
+.pack-card .pc-meta{ display:flex; gap:18px; flex-wrap:wrap;
+  font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--ink-mute); letter-spacing:.04em; }
+.pack-card .pc-meta b{ color:var(--ink); font-weight:500; }
+.pack-spec{ margin-top:42px; border:1px solid var(--line); border-radius:24px; padding:30px 28px;
+  background:linear-gradient(180deg,var(--bg-2),var(--bg)); }
+.pack-spec h3{ font-family:"Fraunces",serif; font-weight:400; font-size:1.4rem; margin:0 0 18px; }
+.spec-table{ width:100%; border-collapse:collapse; }
+.spec-table th{ font-family:"IBM Plex Mono",monospace; font-size:10px; letter-spacing:.18em;
+  text-transform:uppercase; color:var(--ink-mute); text-align:left; padding:0 16px 10px 0; font-weight:400; }
+.spec-table td{ font-size:.94rem; color:var(--ink-soft); padding:8px 16px 8px 0;
+  border-top:1px solid var(--line-2); }
+.spec-table td:first-child{ color:var(--ink); font-weight:500; }
+.spec-table td .swatch-inline{ display:inline-block; width:9px; height:9px; border-radius:50%;
+  margin-right:7px; vertical-align:middle; }
+
+/* ============================================================
+   11. ROADMAP
    ============================================================ */
 .road{ display:grid; grid-template-columns:repeat(3,1fr); gap:20px; margin-top:42px; }
 @media(max-width:780px){ .road{ grid-template-columns:1fr; } }
@@ -471,7 +504,7 @@ footer a:hover{ text-decoration:underline; }
 
       <div class="hero-cta reveal">
         <a class="btn btn-primary" href="#day">See a day in the life</a>
-        <a class="btn btn-ghost" href="#states">Explore the four states</a>
+        <a class="btn btn-ghost" href="#states">Explore the environments</a>
       </div>
 
       <div class="statepick reveal">
@@ -745,6 +778,87 @@ footer a:hover{ text-decoration:underline; }
   </div>
 </section>
 
+<!-- ===== PACK DOCUMENTATION ===== -->
+<section id="pack" aria-label="Fellowship Pack v1.0">
+  <span class="eyebrow reveal">Fellowship Pack · v1.0.0</span>
+  <h2 class="head reveal">Seven environments. One coherent layer.</h2>
+  <p class="lede reveal">The Fellowship Pack is the canonical cognitive environment layer for macOS and iPadOS. Each environment targets a specific nervous-system state — and is calibrated against the failure mode most likely to undermine it.</p>
+
+  <div class="pack-grid">
+
+    <article class="pack-card reveal">
+      <div class="pc-tag">Signal · Day</div>
+      <h3>Receptive learning</h3>
+      <p>Soft mid contrast holds the nervous system parasympathetic while references surface. Constellations over lightfall.</p>
+      <div class="pc-meta"><span>peak · <b>11:00</b></span><span>arousal · <b>parasympathetic</b></span><span>guard · <b>drowsiness</b></span></div>
+    </article>
+
+    <article class="pack-card reveal">
+      <div class="pc-tag">Signal · Moonlight</div>
+      <h3>Receptive, dimmed</h3>
+      <p>The same receptive calm — beam narrowed, field cooled, eyes rested. Twilight waits for no one.</p>
+      <div class="pc-meta"><span>peak · <b>04:30</b></span><span>arousal · <b>parasympathetic</b></span><span>guard · <b>drowsiness</b></span></div>
+    </article>
+
+    <article class="pack-card reveal">
+      <div class="pc-tag">Drift</div>
+      <h3>Light arousal</h3>
+      <p>High luminance and open gradients keep associative thinking moving. Capture stays frictionless; sideways links appear.</p>
+      <div class="pc-meta"><span>peak · <b>16:30</b></span><span>arousal · <b>light</b></span><span>guard · <b>eye fatigue</b></span></div>
+    </article>
+
+    <article class="pack-card reveal">
+      <div class="pc-tag">Forge</div>
+      <h3>Hyperfocus execution</h3>
+      <p>The field drops to low luminance. A single narrow highlight holds the task. Everything else recedes. Forged in deep shadow.</p>
+      <div class="pc-meta"><span>peak · <b>14:00</b></span><span>arousal · <b>hyperfocus</b></span><span>guard · <b>tunnel collapse</b></span></div>
+    </article>
+
+    <article class="pack-card reveal">
+      <div class="pc-tag">Hearth</div>
+      <h3>Sustained attention</h3>
+      <p>Neutral mid tones and gentle contrast hold focus over the long evening stretch without asking the eyes to work. Hearth, heart, home.</p>
+      <div class="pc-meta"><span>peak · <b>20:00</b></span><span>arousal · <b>sustained</b></span><span>guard · <b>visual monotony</b></span></div>
+    </article>
+
+    <article class="pack-card reveal">
+      <div class="pc-tag">Havens · Day</div>
+      <h3>Sanctuary / idle</h3>
+      <p>Luminous, open, asking nothing. The daylight sanctuary — where you go when you step away. Ethereal light in the golden forest.</p>
+      <div class="pc-meta"><span>peak · <b>08:30</b></span><span>arousal · <b>restorative</b></span><span>guard · <b>over-softening</b></span></div>
+    </article>
+
+    <article class="pack-card reveal" style="grid-column:1/-1">
+      <div class="pc-tag">Havens · Moonlight</div>
+      <h3>Closure</h3>
+      <p>A cool, dim glow off the water for the end of the day. Enough to see by — never enough to wake you. Moonlit haven.</p>
+      <div class="pc-meta"><span>peak · <b>23:00</b></span><span>arousal · <b>closure</b></span><span>guard · <b>overstimulating highlights</b></span></div>
+    </article>
+
+  </div>
+
+  <div class="pack-spec reveal">
+    <h3>Technical specification</h3>
+    <table class="spec-table">
+      <thead>
+        <tr>
+          <th>Property</th><th>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Version</td><td>1.0.0</td></tr>
+        <tr><td>Color profile</td><td>sRGB IEC61966-2.1 embedded</td></tr>
+        <tr><td>Master source</td><td>16-bit recommended</td></tr>
+        <tr><td>Export depth</td><td>8-bit dithered</td></tr>
+        <tr><td>Gradient banding</td><td>Inspected on all environments</td></tr>
+        <tr><td>Validation</td><td>Night-room, ~30% display brightness</td></tr>
+        <tr><td>Platform</td><td>macOS · iPadOS</td></tr>
+        <tr><td>Author</td><td>Mazze Whiteley</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
 <!-- ===== ROADMAP ===== -->
 <section aria-label="Roadmap">
   <span class="eyebrow reveal">Roadmap</span>
@@ -770,7 +884,7 @@ footer a:hover{ text-decoration:underline; }
   <div class="meta">
     <span>Cognitive State OS · 2026</span>
     <span>Made in Durham, NC</span>
-    <a href="#states">States</a><a href="#day">Day in the life</a><a href="#">GitHub</a>
+    <a href="#states">Environments</a><a href="#pack">Pack v1.0</a><a href="#day">Day in the life</a><a href="https://github.com/mazze93/fellowship" id="github-link">GitHub</a>
   </div>
 </footer>
 

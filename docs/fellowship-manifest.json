@@ -1,0 +1,79 @@
+{
+  "name": "Fellowship Pack",
+  "version": "1.0.0",
+  "environments": [
+    {
+      "id": "signal-day",
+      "name": "Signal · Day",
+      "cognitiveState": "Receptive learning",
+      "arousal": "parasympathetic",
+      "peakHour": "11:00",
+      "accentHex": "#6fcfc8",
+      "tunedAgainst": "drowsiness"
+    },
+    {
+      "id": "signal-moonlight",
+      "name": "Signal · Moonlight",
+      "cognitiveState": "Receptive, dimmed",
+      "arousal": "parasympathetic",
+      "peakHour": "04:30",
+      "accentHex": "#57b9b6",
+      "tunedAgainst": "drowsiness"
+    },
+    {
+      "id": "drift",
+      "name": "Drift",
+      "cognitiveState": "Light arousal",
+      "arousal": "light",
+      "peakHour": "16:30",
+      "accentHex": "#b29bff",
+      "tunedAgainst": "eye fatigue"
+    },
+    {
+      "id": "forge",
+      "name": "Forge",
+      "cognitiveState": "Hyperfocus",
+      "arousal": "hyperfocus",
+      "peakHour": "14:00",
+      "accentHex": "#e0a45c",
+      "tunedAgainst": "tunnel collapse"
+    },
+    {
+      "id": "hearth",
+      "name": "Hearth",
+      "cognitiveState": "Sustained attention",
+      "arousal": "sustained",
+      "peakHour": "20:00",
+      "accentHex": "#c98a4e",
+      "tunedAgainst": "visual monotony"
+    },
+    {
+      "id": "havens-day",
+      "name": "Havens · Day",
+      "cognitiveState": "Sanctuary / idle",
+      "arousal": "restorative",
+      "peakHour": "08:30",
+      "accentHex": "#d8be6e",
+      "tunedAgainst": "over-softening"
+    },
+    {
+      "id": "havens-moonlight",
+      "name": "Havens · Moonlight",
+      "cognitiveState": "Closure",
+      "arousal": "closure",
+      "peakHour": "23:00",
+      "accentHex": "#8ea3c4",
+      "tunedAgainst": "overstimulating highlights"
+    }
+  ],
+  "intent": "Cognitive accessibility environment layer",
+  "author": "Mazze Whiteley",
+  "colorProfile": "sRGB IEC61966-2.1",
+  "platform": ["macOS", "iPadOS"],
+  "exportSpec": {
+    "masterBitDepth": 16,
+    "exportBitDepth": 8,
+    "dithered": true,
+    "gradientBandingInspected": true
+  }
+}

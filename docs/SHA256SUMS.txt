@@ -1,0 +1,3 @@
+# Run: shasum -a 256 *.png > SHA256SUMS.txt
+# Reference art assets are stored separately from this repository.
+# Verify downloaded assets against checksums provided with each release.
